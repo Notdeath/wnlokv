@@ -1,0 +1,28 @@
+[package]
+name = "testrpc"
+version = "0.1.0"
+authors = ["sbh <1103597933@qq.com>"]
+edition = "2018"
+build = "build.rs"
+
+[lib]
+name ="protos"
+path = "protos/mod.rs"
+
+[dependencies]
+futures = "^0.1.15"
+tokio = "0.1.10"
+tokio-core ="0.1"
+grpcio = { version = "0.4", default-features = false, features = ["protobuf-codec"]  }
+protobuf = "2.0.2"
+
+[build-dependencies.protoc-grpcio]
+git = "https://github.com/mtp401/protoc-grpcio"
+
+[[bin]]
+name = "client"
+path = "src/client.rs"
+
+[[bin]]
+name = "server"
+path = "src/server.rs"
