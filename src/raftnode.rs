@@ -9,7 +9,7 @@ extern crate protobuf;
 extern crate rocksdb;
 use rocksdb::{DB, Writable};
 
-use futures::sync::oneshot;
+// use futures::sync::oneshot;
 use futures::Future;
 
 use grpcio::{Environment, RpcContext, ServerBuilder, UnarySink};
@@ -24,8 +24,12 @@ use raft::prelude::*;
 use raft::storage::MemStorage;
 
 use protos::raftpb::Command;
-use protos::raftpb::CommandType;
+// use protos::raftpb::CommandType;
 use protos::raftpb::CommandReply;
+
+use protos::rafter;
+// use protos::raftpb::Message;
+
 use protobuf::ProtobufEnum;
 
 use protos::raftpb_grpc::{self, *};
@@ -76,7 +80,7 @@ impl Commander for CommanderService {
                 sink: UnarySink<CommandReply>) {
         println!("Recive a req: {:?}", req);
         //let mut resp = HelloReply::new();
-        let mut resp = apply_command(self.sender.clone(), req.clone());
+        let resp = apply_command(self.sender.clone(), req.clone());
         
         let f = sink.success(resp)
                 .map_err(move |e| eprintln!("Fail to reply {:?}: {:?}", req, e));
@@ -84,6 +88,21 @@ impl Commander for CommanderService {
     }
     
      
+}
+
+impl rafter::Rafter for CommanderService {
+    fn send_msg(&mut self, ctx: RpcContext,
+                req: Message, 
+                sink: UnarySink<Message>) {
+        println!("Recive a req: {:?}", req);
+        //let mut resp = HelloReply::new();
+        let resp = Message::new();
+        // let mut resp = apply_command(self.sender.clone(), req.clone());
+        
+        let f = sink.success(resp)
+                .map_err(move |e| eprintln!("Fail to reply {:?}: {:?}", req, e));
+        ctx.spawn(f);
+    }
 }
 
 fn store_commnad(rocks_db: &DB, raft_command: RaftCommand) -> CommandReply{
@@ -96,7 +115,7 @@ fn store_commnad(rocks_db: &DB, raft_command: RaftCommand) -> CommandReply{
                 },
                 Err(e) =>{ 
                     command_reply.set_ok(false);
-                    command_reply.set_value( b"Put value error".to_vec());
+                    command_reply.set_value(e.as_bytes().to_vec());
                 },
             }
         },
@@ -107,7 +126,7 @@ fn store_commnad(rocks_db: &DB, raft_command: RaftCommand) -> CommandReply{
                 },
                 Err(e) =>{ 
                     command_reply.set_ok(false);
-                    command_reply.set_value( b"Delete value error".to_vec());
+                    command_reply.set_value(e.as_bytes().to_vec());
                 },
             }
         },
@@ -119,11 +138,11 @@ fn store_commnad(rocks_db: &DB, raft_command: RaftCommand) -> CommandReply{
                 },
                 Ok(None) => {
                     command_reply.set_ok(true);
-                    command_reply.set_value( b"No value to get".to_vec());
+                    command_reply.set_value(b"No value to get".to_vec());
                 },
                 Err(e) => { 
                     command_reply.set_ok(false);
-                    command_reply.set_value( b"Get value error".to_vec());
+                    command_reply.set_value(e.as_bytes().to_vec());
                 },
             }
         },
@@ -139,7 +158,7 @@ fn store_commnad(rocks_db: &DB, raft_command: RaftCommand) -> CommandReply{
 fn main() {
     println!("Hello, world!");
     //start raft
-    let mut  rocks_db: DB = DB::open_default("/path/for/rocksdb/storage").unwrap();
+    let rocks_db: DB = DB::open_default("/path/for/rocksdb/storage").unwrap();
     let storage = MemStorage::new();
     let cfg = Config{
         id: 1,
@@ -167,6 +186,14 @@ fn main() {
     println!("send propose!");
     let env = Arc::new(Environment::new(1));
     let service = raftpb_grpc::create_commander(CommanderService::new(sender.clone()));
+    let mut server = ServerBuilder::new(env.clone())
+        .register_service(service)
+        .bind("127.0.0.1", 8080)
+        .build().unwrap();
+    
+    server.start();
+
+    let service = rafter::create_rafter(CommanderService::new(sender.clone()));
     let mut server = ServerBuilder::new(env)
         .register_service(service)
         .bind("127.0.0.1", 8080)
@@ -303,13 +330,12 @@ fn send_propose(sender: mpsc::Sender<Msg>) {
     thread::spawn(move || {
         thread::sleep(Duration::from_secs(10));
         let (s1, r1) = mpsc::channel::<u8>();
-        let reply = CommandReply::new();
         println!("propose a request");
         sender
             .send(Msg::Propose {
                 id: 1,
                 command: Command::new(),
-                cb: Box::new(move |relpy| {
+                cb: Box::new(move |_relpy| {
                     s1.send(0).unwrap();
                 }),
             }).unwrap();
@@ -333,7 +359,7 @@ fn apply_command(sender: mpsc::Sender<Msg>, command: Command)
         cb: Box::new(move |reply| {
             s1.send(reply).unwrap();
         }),
-    });
+    }).unwrap();
     
     let reply = r1.recv().unwrap();
 

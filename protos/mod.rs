@@ -4,3 +4,4 @@ extern crate protobuf;
 
 pub mod raftpb;
 pub mod raftpb_grpc;
+pub mod rafter;
