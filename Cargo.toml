@@ -15,14 +15,27 @@ tokio = "0.1.10"
 tokio-core ="0.1"
 grpcio = { version = "0.4", default-features = false, features = ["protobuf-codec"]  }
 protobuf = "2.0.2"
+serde = "1.0"
+serde_json = "1.0"
+serde_derive = "1.0"
+
+[dependencies.raft]
+git = "https://github.com/pingcap/raft-rs.git" 
+
+[dependencies.rocksdb]
+git = "https://github.com/pingcap/rust-rocksdb.git"
 
 [build-dependencies.protoc-grpcio]
 git = "https://github.com/mtp401/protoc-grpcio"
 
 [[bin]]
 name = "client"
-path = "src/client.rs"
+path = "src/kvclient.rs"
 
 [[bin]]
 name = "server"
 path = "src/server.rs"
+
+[[bin]]
+name = "raft"
+path = "src/raftnode.rs"

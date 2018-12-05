@@ -22,6 +22,7 @@ struct GreeterService;
 impl Greeter for GreeterService {
     fn say_hello(&mut self, ctx: RpcContext, req: HelloRequest,
                  sink: UnarySink<HelloReply>) {
+ 
         println!("Recive a req: {:?}", req);
         let msg = format!("Hello {}", req.get_name());
         thread::sleep(Duration::from_secs(1));
@@ -32,6 +33,8 @@ impl Greeter for GreeterService {
         ctx.spawn(f);
     }
 }
+
+
 
 fn main() {
     let env = Arc::new(Environment::new(1));
