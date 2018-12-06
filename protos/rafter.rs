@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use raft::prelude::*;
 use raft::storage::MemStorage;
 use super::raftpb::Command;
@@ -22,6 +24,19 @@ pub struct RafterClient {
     client: ::grpcio::Client,
 }
 
+trait MyDefault {
+    fn call_option_default() -> ::grpcio::CallOption;
+}
+
+
+
+impl MyDefault for ::grpcio::CallOption {
+    fn call_option_default() ->grpcio::CallOption {
+        let mut op = ::grpcio::CallOption::default();
+        op.timeout(Duration::from_millis(100))
+    }
+}
+
 impl RafterClient {
     pub fn new(channel: ::grpcio::Channel) -> Self {
         RafterClient {
@@ -34,7 +49,7 @@ impl RafterClient {
     }
 
     pub fn send_msg(&self, req: &Message) -> ::grpcio::Result<Message> {
-        self.send_msg_opt(req, ::grpcio::CallOption::default())
+        self.send_msg_opt(req, ::grpcio::CallOption::call_option_default())
     }
 
     pub fn send_msg_async_opt(&self, req: &Message, opt: ::grpcio::CallOption) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<Message>> {
@@ -42,7 +57,7 @@ impl RafterClient {
     }
 
     pub fn send_msg_async(&self, req: &Message) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<Message>> {
-        self.send_msg_async_opt(req, ::grpcio::CallOption::default())
+        self.send_msg_async_opt(req, ::grpcio::CallOption::call_option_default())
     }
 
     pub fn send_command_opt(&self, req: &Command, opt: ::grpcio::CallOption) -> ::grpcio::Result<CommandReply> {
@@ -50,7 +65,7 @@ impl RafterClient {
     }
 
     pub fn send_command(&self, req: &Command) -> ::grpcio::Result<CommandReply> {
-        self.send_command_opt(req, ::grpcio::CallOption::default())
+        self.send_command_opt(req, ::grpcio::CallOption::call_option_default())
     }
 
     pub fn send_command_async_opt(&self, req: &Command, opt: ::grpcio::CallOption) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<CommandReply>> {
@@ -58,7 +73,7 @@ impl RafterClient {
     }
 
     pub fn send_command_async(&self, req: &Command) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<CommandReply>> {
-        self.send_command_async_opt(req, ::grpcio::CallOption::default())
+        self.send_command_async_opt(req, ::grpcio::CallOption::call_option_default())
     }
     pub fn spawn<F>(&self, f: F) where F: ::futures::Future<Item = (), Error = ()> + Send + 'static {
         self.client.spawn(f)
