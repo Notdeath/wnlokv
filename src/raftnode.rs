@@ -174,7 +174,7 @@ fn main() {
 
 
     //start raft
-    let rocks_db: DB = DB::open_default("/path/for/rocksdb/storage").unwrap();
+    let rocks_db: DB = DB::open_default(&format!("/path/for/rocksdb/storage{}", port_num)).unwrap();
     let storage = MemStorage::new();
     let cfg = Config{
         id: port_num,
@@ -247,7 +247,10 @@ fn main() {
                     println!("is not leader");
                 }
             },
-            Ok(Msg::Raft(m)) => r.step(m).unwrap(),
+            Ok(Msg::Raft(m)) => {
+                println!("recived msg is: {:?}", m);
+                r.step(m).unwrap();
+            },
             Err(RecvTimeoutError::Timeout) => (),
             Err(RecvTimeoutError::Disconnected) => return,
         }
