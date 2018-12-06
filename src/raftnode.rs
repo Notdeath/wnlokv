@@ -205,7 +205,7 @@ fn main() {
     let service = raftpb_grpc::create_commander(raft_server.clone());
     let mut server = ServerBuilder::new(env.clone())
         .register_service(service)
-        .bind("127.0.0.1", port as u16)
+        .bind("127.0.0.1", port as u16 + 1)
         .build().unwrap();
     
     server.start();
