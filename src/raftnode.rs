@@ -168,6 +168,9 @@ fn main() {
     let num: u64 = arg.trim().parse().unwrap();
     arg = &args[2];
     let port_num: u64 = arg.trim().parse().unwrap();
+    let port = 8080 + 2 * port_num;
+
+    
 
 
     //start raft
@@ -202,7 +205,7 @@ fn main() {
     let service = raftpb_grpc::create_commander(raft_server.clone());
     let mut server = ServerBuilder::new(env.clone())
         .register_service(service)
-        .bind("127.0.0.1", 8082)
+        .bind("127.0.0.1", port as u16)
         .build().unwrap();
     
     server.start();
@@ -210,7 +213,7 @@ fn main() {
     let service = rafter::create_rafter(raft_server.clone());
     let mut server = ServerBuilder::new(env)
         .register_service(service)
-        .bind("127.0.0.1", 8082)
+        .bind("127.0.0.1", port as u16)
         .build().unwrap();
     
     server.start();
@@ -366,17 +369,18 @@ fn on_ready(r: &mut RawNode<MemStorage>,
                 println!("Entry is: {:?}", entry);
                 let mut cc = ConfChange::new();
                 cc.merge_from_bytes(&entry.get_data());
+                println!("ConfChange: {:?}", cc);
                 println!("Append ip is {}", String::from_utf8(cc.get_context().to_vec()).unwrap());
                 match cc.get_change_type() {
                     ConfChangeType::RemoveNode => {
-                        peers_clients.remove(&cc.get_id());
+                        peers_clients.remove(&cc.get_node_id());
                     },
                     _ => {
-                        if cc.get_id() != r.raft.id {
+                        if cc.get_node_id() != r.raft.id {
                             let ch = ChannelBuilder::new(env.clone()).connect(
                                     &String::from_utf8(cc.get_context().to_vec()).unwrap());
                             let client = rafter::RafterClient::new(ch);
-                            peers_clients.insert(cc.get_id(), Box::new(client));
+                            peers_clients.insert(cc.get_node_id(), Box::new(client));
                         }
                     }
                 }
