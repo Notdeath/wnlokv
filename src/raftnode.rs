@@ -333,15 +333,12 @@ fn on_ready(r: &mut RawNode<MemStorage>,
         for msg in msgs {
             let to = msg.get_to();
             if to != r.raft.id {
-                // let client = peers_clients.get(&to).unwrap();
-                let ch = ChannelBuilder::new(env.clone()).connect(
-                                    &format!("127.0.0.1:{}", 8080 + to *2));
-                let client = rafter::RafterClient::new(ch);
+                let client = peers_clients.get(&to).unwrap();
                 fvec.push(client.send_msg_async(&msg).unwrap()
                     .and_then(move |mut resp| {
                         println!("value is {:?}", resp);
                         Ok(())
-                    }).map_err(|e| {println!("Error {}", e);}));
+                    }).map_err(|_| ()));
             }
             // Here we only have one peer, so can ignore this.
         }
