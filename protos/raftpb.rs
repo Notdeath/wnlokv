@@ -3190,10 +3190,11 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     reVoteResponse\x10\x12*A\n\x0eConfChangeType\x12\x0b\n\x07AddNode\x10\0\
     \x12\x0e\n\nRemoveNode\x10\x01\x12\x12\n\x0eAddLearnerNode\x10\x022A\n\
     \x07Greeter\x126\n\x08SayHello\x12\x14.raftpb.HelloRequest\x1a\x12.raftp\
-    b.HelloReply\"\027\n\x06Rafter\x12-\n\x07SendMsg\x12\x0f.raftpb.Message\
-    \x1a\x0f.raftpb.Message\"\02C\n\tCommander\x126\n\x0bSendCommand\x12\x0f\
-    .raftpb.Command\x1a\x14.raftpb.CommandReply\"\0B6\n\x1bio.grpc.examples.\
-    helloworldB\x0fHelloWorldProtoP\x01\xa2\x02\x03HLWb\x06proto3\
+    b.HelloReply\"\02o\n\x06Rafter\x12-\n\x07SendMsg\x12\x0f.raftpb.Message\
+    \x1a\x0f.raftpb.Message\"\0\x126\n\x0bSendCommand\x12\x0f.raftpb.Command\
+    \x1a\x14.raftpb.CommandReply\"\02C\n\tCommander\x126\n\x0bSendCommand\
+    \x12\x0f.raftpb.Command\x1a\x14.raftpb.CommandReply\"\0B6\n\x1bio.grpc.e\
+    xamples.helloworldB\x0fHelloWorldProtoP\x01\xa2\x02\x03HLWb\x06proto3\
 ";
 
 static mut file_descriptor_proto_lazy: ::protobuf::lazy::Lazy<::protobuf::descriptor::FileDescriptorProto> = ::protobuf::lazy::Lazy {

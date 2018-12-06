@@ -104,6 +104,18 @@ impl rafter::Rafter for RaftServer {
                 .map_err(move |e| eprintln!("Fail to reply {:?}: {:?}", req, e));
         ctx.spawn(f);
     }
+
+    fn send_command(&mut self, ctx: RpcContext,
+                req: Command, 
+                sink: UnarySink<CommandReply>) {
+        println!("Recive a req: {:?}", req);
+        //let mut resp = HelloReply::new();
+        let resp = apply_command(self.sender.clone(), req.clone());
+        
+        let f = sink.success(resp)
+                .map_err(move |e| eprintln!("Fail to reply {:?}: {:?}", req, e));
+        ctx.spawn(f);
+    }
 }
 
 fn store_commnad(rocks_db: &DB, raft_command: RaftCommand) -> CommandReply{
@@ -199,16 +211,16 @@ fn main() {
 
     let mut r = RawNode::new(&cfg, storage, peers).unwrap();
     let (sender, receiver) = mpsc::channel();
-    println!("send propose!");
     let env = Arc::new(Environment::new(1));
     let raft_server = RaftServer::new(sender);
-    let service = raftpb_grpc::create_commander(raft_server.clone());
-    let mut server = ServerBuilder::new(env.clone())
-        .register_service(service)
-        .bind("127.0.0.1", port as u16 + 1)
-        .build().unwrap();
     
-    server.start();
+    // let service = raftpb_grpc::create_commander(raft_server.clone());
+    // let mut server = ServerBuilder::new(env.clone())
+    //     .register_service(service)
+    //     .bind("127.0.0.1", port as u16 + 1)
+    //     .build().unwrap();
+    
+    // server.start();
 
     let service = rafter::create_rafter(raft_server.clone());
     let mut server = ServerBuilder::new(env)

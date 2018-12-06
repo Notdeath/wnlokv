@@ -38,7 +38,8 @@ message HelloReply {
 }
 
 service Rafter {
-    rpc SendMsg (Message) returns (Message) {}
+    rpc SendMsg (Message) returns (Message){}
+    rpc SendCommand(Command) returns (CommandReply) {}
 }
 
 service Commander {
