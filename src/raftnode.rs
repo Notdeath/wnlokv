@@ -178,7 +178,7 @@ fn main() {
     let storage = MemStorage::new();
     let cfg = Config{
         id: port_num,
-        peers: vec![1],
+        peers: vec![],
         election_tick: 10,
         heartbeat_tick: 3,
         max_size_per_msg: 1024 * 1024 * 1024,
@@ -437,6 +437,8 @@ fn apply_command(sender: mpsc::Sender<Msg>, command: Command)
 
 fn apply_message(sender: mpsc::Sender<Msg>, message: Message) {
     println!("Propose a command");
+
+    println!("Message is: {:?}", message);
 
     sender.send(Msg::Raft(message)).unwrap();
 
