@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use raft::prelude::*;
-use raft::storage::MemStorage;
 use super::raftpb::Command;
 use super::raftpb::CommandReply;
 
@@ -31,9 +30,10 @@ trait MyDefault {
 
 
 impl MyDefault for ::grpcio::CallOption {
-    fn call_option_default() ->grpcio::CallOption {
-        let mut op = ::grpcio::CallOption::default();
-        op.timeout(Duration::from_millis(100))
+    fn call_option_default() -> ::grpcio::CallOption {
+        let op = ::grpcio::CallOption::default();
+        let op = op.timeout(Duration::from_millis(100));
+        op
     }
 }
 
@@ -97,10 +97,3 @@ pub fn create_rafter<S: Rafter + Send + Clone + 'static>(s: S) -> ::grpcio::Serv
     });
     builder.build()
 }
-
-const METHOD_COMMANDER_SEND_COMMAND: ::grpcio::Method<Command, CommandReply> = ::grpcio::Method {
-    ty: ::grpcio::MethodType::Unary,
-    name: "/raftpb.Commander/SendCommand",
-    req_mar: ::grpcio::Marshaller { ser: ::grpcio::pb_ser, de: ::grpcio::pb_de },
-    resp_mar: ::grpcio::Marshaller { ser: ::grpcio::pb_ser, de: ::grpcio::pb_de },
-};

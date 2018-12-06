@@ -54,7 +54,7 @@ fn main() {
     thread::spawn(move || {
         println!("Press Enter to exit ...");
         let _ = io::stdin().read(&mut [0]).unwrap();
-        tx.send(());
+        tx.send(()).unwrap();
     });
 
     let _ = rx.wait();

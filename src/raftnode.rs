@@ -1,7 +1,3 @@
-#[macro_use] extern crate serde_derive;
-extern crate serde;
-extern crate serde_json;
-
 extern crate grpcio;
 extern crate futures;
 extern crate protobuf;
@@ -17,7 +13,6 @@ use grpcio::{Environment, RpcContext, ServerBuilder, UnarySink, EnvBuilder, Chan
 
 use std::collections::HashMap;
 use std::sync::mpsc::{self, RecvTimeoutError};
-use std::thread;
 use std::time::{Duration, Instant};
 use std::sync::Arc;
 
@@ -25,14 +20,10 @@ use raft::prelude::*;
 use raft::storage::MemStorage;
 
 use protos::raftpb::Command;
-// use protos::raftpb::CommandType;
+use protos::raftpb::CommandType;
 use protos::raftpb::CommandReply;
 
-use protos::rafter;
-
-use protobuf::ProtobufEnum;
-
-use protos::raftpb_grpc::{self, *};
+use protos::rafter::{self, *};
 
 type  ProposeCallback = Box<Fn(CommandReply) + Send>;
 
@@ -48,46 +39,30 @@ enum Msg {
     Raft(Message),
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-struct RaftCommand {
-    op: i32,
-    key: Vec<u8>,
-    value: Vec<u8>,
-}
-
 struct RaftServer {
     sender: mpsc::Sender<Msg>,
+    peer_clients: HashMap<u64, Box<rafter::RafterClient>>,
+    env: Arc<Environment>,
+}
+
+impl RaftServer {
+    fn new(sender: mpsc::Sender<Msg>, env: Arc<Environment>) ->RaftServer {
+        RaftServer {
+            sender,
+            peer_clients: HashMap::new(),
+            env,
+        }
+    }
 }
 
 impl Clone for RaftServer {
     fn clone(&self) ->Self {
         RaftServer {
             sender: self.sender.clone(),
+            peer_clients: self.peer_clients.clone(),
+            env: self.env.clone(),  
         }
     }
-}
-
-impl RaftServer {
-    fn new(sender: mpsc::Sender<Msg>) ->RaftServer {
-        RaftServer {
-            sender,
-        }
-    }
-}
-impl Commander for RaftServer {
-    fn send_command(&mut self, ctx: RpcContext,
-                req: Command, 
-                sink: UnarySink<CommandReply>) {
-        println!("Recive a req: {:?}", req);
-        //let mut resp = HelloReply::new();
-        let resp = apply_command(self.sender.clone(), req.clone());
-        
-        let f = sink.success(resp)
-                .map_err(move |e| eprintln!("Fail to reply {:?}: {:?}", req, e));
-        ctx.spawn(f);
-    }
-    
-     
 }
 
 impl rafter::Rafter for RaftServer {
@@ -118,56 +93,6 @@ impl rafter::Rafter for RaftServer {
     }
 }
 
-fn store_commnad(rocks_db: &DB, raft_command: RaftCommand) -> CommandReply{
-    let mut command_reply = CommandReply::new();
-    match raft_command.op {
-        0 => {
-            match rocks_db.put(&raft_command.key[..], &raft_command.value[..]) {
-                Ok(_) =>{ 
-                    command_reply.set_ok(true);
-                },
-                Err(e) =>{ 
-                    command_reply.set_ok(false);
-                    command_reply.set_value(e.as_bytes().to_vec());
-                },
-            }
-        },
-        1 => {
-            match rocks_db.delete(&raft_command.key[..]) {
-                Ok(_) =>{ 
-                    command_reply.set_ok(true);
-                },
-                Err(e) =>{ 
-                    command_reply.set_ok(false);
-                    command_reply.set_value(e.as_bytes().to_vec());
-                },
-            }
-        },
-        2 => {
-            match rocks_db.get(&raft_command.key[..]) {
-                Ok(Some(value)) =>{ 
-                    command_reply.set_ok(true);
-                    command_reply.set_value(value.to_vec());
-                },
-                Ok(None) => {
-                    command_reply.set_ok(true);
-                    command_reply.set_value(b"No value to get".to_vec());
-                },
-                Err(e) => { 
-                    command_reply.set_ok(false);
-                    command_reply.set_value(e.as_bytes().to_vec());
-                },
-            }
-        },
-        _ => {
-            command_reply.set_ok(false);
-            command_reply.set_value( b"Error command".to_vec());
-        },
-    }
-    println!("Command reply value is {:?}", command_reply.get_value());
-    command_reply
-}
-
 fn main() {
     println!("Hello, world!");
 
@@ -182,17 +107,13 @@ fn main() {
     let port_num: u64 = arg.trim().parse().unwrap();
     let port = 8080 + 2 * port_num;
 
-    
-
-
-    //start raft
     let rocks_db: DB = DB::open_default(&format!("/path/for/rocksdb/storage{}", port_num)).unwrap();
     let storage = MemStorage::new();
     let cfg = Config{
         id: port_num,
         peers: vec![],
         election_tick: 10,
-        heartbeat_tick: 3,
+        heartbeat_tick: 1,
         max_size_per_msg: 1024 * 1024 * 1024,
         max_inflight_msgs: 256,
         applied: 0,
@@ -211,19 +132,11 @@ fn main() {
 
     let mut r = RawNode::new(&cfg, storage, peers).unwrap();
     let (sender, receiver) = mpsc::channel();
-    let env = Arc::new(Environment::new(1));
-    let raft_server = RaftServer::new(sender);
-    
-    // let service = raftpb_grpc::create_commander(raft_server.clone());
-    // let mut server = ServerBuilder::new(env.clone())
-    //     .register_service(service)
-    //     .bind("127.0.0.1", port as u16 + 1)
-    //     .build().unwrap();
-    
-    // server.start();
+    let env = Arc::new(EnvBuilder::new().build());
+    let mut raft_server = RaftServer::new(sender, env.clone());
 
     let service = rafter::create_rafter(raft_server.clone());
-    let mut server = ServerBuilder::new(env)
+    let mut server = ServerBuilder::new(env.clone())
         .register_service(service)
         .bind("127.0.0.1", port as u16)
         .build().unwrap();
@@ -237,8 +150,7 @@ fn main() {
     let mut t = Instant::now();
     let mut timeout = Duration::from_millis(100);
     let mut cbs = HashMap::new();
-    let mut peer_ips = HashMap::new();
-    let env = Arc::new(EnvBuilder::new().build());
+    let mut peer_clients = HashMap::new();
 
     loop {
         match receiver.recv_timeout(timeout) {
@@ -247,16 +159,15 @@ fn main() {
                 if is_leader {
                     println!("is leader");
                     cbs.insert(id, cb);
-                    let raft_command = RaftCommand {
-                        op: command.command_type.value(),
-                        key: command.key,
-                        value: command.value,
-                    };
-                    let data = serde_json::to_string(&raft_command).unwrap();
-                    println!("Call Data is: {}", data);
-                    r.propose(data.as_bytes().to_vec(), vec![id]).unwrap();
+                    let data = protobuf::Message::write_to_bytes(&command).unwrap();
+                    println!("Call Data is: {:?}", data);
+                    r.propose(vec![id], data).unwrap();
                 } else {
                     println!("is not leader");
+                    let mut reply = CommandReply::new();
+                    reply.set_ok(false);
+                    //reply.set_value();
+                    cb(reply);
                 }
             },
             Ok(Msg::Raft(m)) => {
@@ -278,14 +189,14 @@ fn main() {
             timeout -= d;
         }
 
-        on_ready(&mut r, &mut cbs, &mut peer_ips, env.clone(), &rocks_db);
+        on_ready(&mut r, &mut cbs, &mut peer_clients, env.clone(), &rocks_db);
     }
     
 }
 
 fn on_ready(r: &mut RawNode<MemStorage>,
             cbs: &mut HashMap<u8, ProposeCallback>, 
-            peers_clients: &mut HashMap<u64, Box<rafter::RafterClient>>,
+            peer_clients: &mut HashMap<u64, Box<RafterClient>>, 
             env: Arc<Environment>, 
             rocks_db: &DB) {
     if !r.has_ready() {
@@ -304,9 +215,9 @@ fn on_ready(r: &mut RawNode<MemStorage>,
         for msg in msgs {
             let to = msg.get_to();
             if to != r.raft.id {
-                let client = peers_clients.get(&to).unwrap();
+                let client = peer_clients.get(&to).unwrap();
                 fvec.push(client.send_msg_async(&msg).unwrap()
-                    .and_then(move |mut resp| {
+                    .and_then(move |resp| {
                         println!("value is {:?}", resp);
                         Ok(())
                     }).map_err(|_| ()));
@@ -345,9 +256,9 @@ fn on_ready(r: &mut RawNode<MemStorage>,
         for msg in msgs {
             let to = msg.get_to();
             if to != r.raft.id {
-                let client = peers_clients.get(&to).unwrap();
+                let client = peer_clients.get(&to).unwrap();
                 fvec.push(client.send_msg_async(&msg).unwrap()
-                    .and_then(move |mut resp| {
+                    .and_then(move |resp| {
                         println!("value is {:?}", resp);
                         Ok(())
                     }).map_err(|_| ()));
@@ -373,32 +284,36 @@ fn on_ready(r: &mut RawNode<MemStorage>,
 
             if entry.get_entry_type() == EntryType::EntryNormal {
                 println!("Data is {:?}", entry.context.as_slice());
-                if let Some(cb) = cbs.remove(entry.get_data().get(0).unwrap()) {
-                    let raft_command: RaftCommand = serde_json::from_slice(entry.context.as_slice()).unwrap();
-                    let reply = store_commnad(rocks_db, raft_command);
+                if let Some(cb) = cbs.remove(entry.get_context().get(0).unwrap()) {
+                    use protobuf::Message;
+                    let mut command = Command::new();
+                    command.merge_from_bytes(entry.get_data()).unwrap();
+                    let reply = use_commnad(rocks_db, &command);
                     println!("start call back");
                     cb(reply);
                 }
             } else {
+
                 use protobuf::Message;
                 println!("Entry is: {:?}", entry);
                 let mut cc = ConfChange::new();
-                cc.merge_from_bytes(&entry.get_data());
+                cc.merge_from_bytes(&entry.get_data()).unwrap();
                 println!("ConfChange: {:?}", cc);
                 println!("Append ip is {}", String::from_utf8(cc.get_context().to_vec()).unwrap());
                 match cc.get_change_type() {
                     ConfChangeType::RemoveNode => {
-                        peers_clients.remove(&cc.get_node_id());
+                        peer_clients.remove(&cc.get_node_id());
                     },
                     _ => {
                         if cc.get_node_id() != r.raft.id {
                             let ch = ChannelBuilder::new(env.clone()).connect(
                                     &String::from_utf8(cc.get_context().to_vec()).unwrap());
                             let client = rafter::RafterClient::new(ch);
-                            peers_clients.insert(cc.get_node_id(), Box::new(client));
+                            peer_clients.insert(cc.get_node_id(), Box::new(client));
                         }
                     }
                 }
+                r.apply_conf_change(&cc);
             }
 
             // TODO: handle EntryConfChange
@@ -409,25 +324,51 @@ fn on_ready(r: &mut RawNode<MemStorage>,
     r.advance(ready);
 }
 
-fn send_propose(sender: mpsc::Sender<Msg>) {
-    thread::spawn(move || {
-        thread::sleep(Duration::from_secs(10));
-        let (s1, r1) = mpsc::channel::<u8>();
-        println!("propose a request");
-        sender
-            .send(Msg::Propose {
-                id: 1,
-                command: Command::new(),
-                cb: Box::new(move |_relpy| {
-                    s1.send(0).unwrap();
-                }),
-            }).unwrap();
-        let n = r1.recv().unwrap();
-        assert_eq!(n, 0);
-        println!("receive the propose callback");
-    });
+fn use_commnad(rocks_db: &DB, command: &Command) -> CommandReply{
+    let mut command_reply = CommandReply::new();
+    match command.get_command_type() {
+        CommandType::CommandPut => {
+            match rocks_db.put(&command.key[..], &command.value[..]) {
+                Ok(_) =>{ 
+                    command_reply.set_ok(true);
+                },
+                Err(e) =>{ 
+                    command_reply.set_ok(false);
+                    command_reply.set_value(e.as_bytes().to_vec());
+                },
+            }
+        },
+        CommandType::CommandDelete => {
+            match rocks_db.delete(&command.key[..]) {
+                Ok(_) =>{ 
+                    command_reply.set_ok(true);
+                },
+                Err(e) =>{ 
+                    command_reply.set_ok(false);
+                    command_reply.set_value(e.as_bytes().to_vec());
+                },
+            }
+        },
+        CommandType::CommandGet => {
+            match rocks_db.get(&command.key[..]) {
+                Ok(Some(value)) =>{ 
+                    command_reply.set_ok(true);
+                    command_reply.set_value(value.to_vec());
+                },
+                Ok(None) => {
+                    command_reply.set_ok(true);
+                    command_reply.set_value(b"No value to get".to_vec());
+                },
+                Err(e) => { 
+                    command_reply.set_ok(false);
+                    command_reply.set_value(e.as_bytes().to_vec());
+                },
+            }
+        },
+    }
+    println!("Command reply value is {:?}", command_reply.get_value());
+    command_reply
 }
-
 
 
 fn apply_command(sender: mpsc::Sender<Msg>, command: Command) 
@@ -451,7 +392,7 @@ fn apply_command(sender: mpsc::Sender<Msg>, command: Command)
 }
 
 fn apply_message(sender: mpsc::Sender<Msg>, message: Message) {
-    println!("Propose a command");
+    println!("Propose a Message");
 
     println!("Message is: {:?}", message);
 
