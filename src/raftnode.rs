@@ -341,7 +341,7 @@ fn on_ready(r: &mut RawNode<MemStorage>,
                     .and_then(move |mut resp| {
                         println!("value is {:?}", resp);
                         Ok(())
-                    }).map_err(|_| ()));
+                    }).map_err(|e| {println!("Error {}", e);}));
             }
             // Here we only have one peer, so can ignore this.
         }
