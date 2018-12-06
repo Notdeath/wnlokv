@@ -20,6 +20,7 @@ fn main() {
     let ch = ChannelBuilder::new(env).connect("localhost:8080");
     let client = CommanderClient::new(ch);
     let mut fvec = vec![];
+    let client = client.clone();
     let startime = Arc::new(Instant::now()); 
     for i in 0..10 {
         let key = format!("key{}", i);
