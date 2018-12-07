@@ -12,7 +12,7 @@ use futures::Future;
 
 use grpcio::{ChannelBuilder, EnvBuilder};
 use protos::raftpb::{CommandType, Command};
-use protos::raftpb_grpc::CommanderClient;
+use protos::commander::CommanderClient;
 
 fn main() {
     // let mut core = Core::new().unwrap();
@@ -31,7 +31,7 @@ fn main() {
         req.set_value(value.as_bytes().to_vec());
         let startime = startime.clone();
         fvec.push(client.send_command_async(&req).unwrap()
-            .and_then(move |mut resp| {
+            .and_then(move |resp| {
                 let time_cost = startime.elapsed();
                 println!("{:?} ({:?})", resp, time_cost);
                 println!("value is {:?}",String::from_utf8(req.value));
@@ -54,7 +54,7 @@ fn main() {
         req.set_key(key.as_bytes().to_vec());
         let startime = startime.clone();
         fvec.push(client.send_command_async(&req).unwrap()
-            .and_then(move |mut resp| {
+            .and_then(move |resp| {
                 let time_cost = startime.elapsed();
                 println!("{:?} ({:?})", resp, time_cost);
                 println!("value is {:?}", String::from_utf8(resp.value));

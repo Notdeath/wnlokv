@@ -24,9 +24,8 @@ use raft::storage::MemStorage;
 use protos::raftpb::Command;
 use protos::raftpb::CommandType;
 use protos::raftpb::CommandReply;
-use protos::raftpb_grpc::Commander;
-use protos::raftpb_grpc;
 
+use protos::commander;
 use protos::rafter;
 
 type  ProposeCallback = Box<Fn(CommandReply) + Send>;
@@ -45,11 +44,10 @@ enum Msg {
 
 struct RaftServer {
     sender: mpsc::Sender<Msg>,
-
 }
 
 impl RaftServer {
-    fn new(sender: mpsc::Sender<Msg>, env: Arc<Environment>) ->RaftServer {
+    fn new(sender: mpsc::Sender<Msg>) ->RaftServer {
         RaftServer {
             sender,
         }
@@ -68,26 +66,16 @@ impl rafter::Rafter for RaftServer {
     fn send_msg(&mut self, ctx: RpcContext,
                 req: Message, 
                 sink: UnarySink<Message>) {
-        // println!("Recive a req: {:?}", req);
-        //let mut resp = HelloReply::new();
-        let resp = Message::new();
-        //let mut resp = apply_command(self.sender.clone(), req.clone());
-        apply_message(mpsc::Sender::clone(&self.sender), req.clone());
-        
-        let f = sink.success(resp)
-                .map_err(move |e| eprintln!("Fail to reply {:?}: {:?}", req, e));
-        ctx.spawn(f);
-    }
-
-    fn send_command(&mut self, ctx: RpcContext,
-                req: Command, 
-                sink: UnarySink<CommandReply>) {
-        println!("Recive a req: {:?}", req);
-        //let mut resp = HelloReply::new();
-        let resp = apply_command(mpsc::Sender::clone(&self.sender), req.clone());
-        
-        let f = sink.success(resp)
-                .map_err(move |e| eprintln!("Fail to reply {:?}: {:?}", req, e));
+        let f = ok::<u32, u32>(1);
+        let sender = mpsc::Sender::clone(&self.sender);
+        let f = f.then(move |_| {
+            let resp = apply_message(sender, req);
+            Ok(resp)
+        })
+        .and_then(|res| sink.success(res)
+                .map_err(move |e| eprintln!("Fail to reply: {:?}", e)))
+        .map(|_| ())
+        .map_err(|_| ());
         ctx.spawn(f);
     }
 }
@@ -105,16 +93,7 @@ impl Clone for CommandServer {
     }
 }
 
-impl CommandServer {
-    fn new(sender: mpsc::Sender<Msg>, env: Arc<Environment>) ->CommandServer {
-        CommandServer {
-            sender,
-        }
-    }
-}
-
-
-impl Commander for CommandServer {
+impl commander::Commander for CommandServer {
     fn send_command(&mut self, ctx: RpcContext,
                 req: Command, 
                 sink: UnarySink<CommandReply>) {
@@ -134,7 +113,7 @@ impl Commander for CommandServer {
     }
 }
 
-static mut seq: u8 = 1;
+static mut SEQ: u8 = 1;
 
 fn main() {
     println!("Hello, world!");
@@ -176,7 +155,7 @@ fn main() {
     let mut r = RawNode::new(&cfg, storage, peers).unwrap();
     let (sender, receiver) = mpsc::channel();
 
-    let service = raftpb_grpc::create_commander(CommandServer {
+    let service = commander::create_commander(CommandServer {
         sender: mpsc::Sender::clone(&sender),
     });
     let mut server = ServerBuilder::new(env.clone())
@@ -189,7 +168,7 @@ fn main() {
         println!("Listening on {}:{}", host, port);
     }
     let env = Arc::new(EnvBuilder::new().build());
-    let mut raft_server = RaftServer::new(mpsc::Sender::clone(&sender), env.clone());
+    let raft_server = RaftServer::new(mpsc::Sender::clone(&sender));
 
     let service = rafter::create_rafter(raft_server.clone());
     let mut server = ServerBuilder::new(env.clone())
@@ -206,7 +185,6 @@ fn main() {
     let mut t = Instant::now();
     let mut timeout = Duration::from_millis(100);
     let mut cbs = HashMap::new();
-    let mut peer_clients = HashMap::new();
     let (ms, mr)  = mpsc::channel();
     msg_send_thread(mr, env.clone(), port_num);
 
@@ -265,16 +243,14 @@ fn main() {
             timeout -= d;
         }
         let ms1 = mpsc::Sender::clone(&ms);
-        on_ready(&mut r, &mut cbs, &mut peer_clients, ms1, env.clone(), &rocks_db);
+        on_ready(&mut r, &mut cbs, ms1, &rocks_db);
     }
     
 }
 
 fn on_ready(r: &mut RawNode<MemStorage>,
             cbs: &mut HashMap<u8, ProposeCallback>, 
-            peer_clients: &mut HashMap<u64, Box<rafter::RafterClient>>,
             sender: mpsc::Sender<Message>, 
-            env: Arc<Environment>, 
             rocks_db: &DB) {
     if !r.has_ready() {
         return;
@@ -392,20 +368,20 @@ fn on_ready(r: &mut RawNode<MemStorage>,
                 cc.merge_from_bytes(&entry.get_data()).unwrap();
                 println!("ConfChange: {:?}", cc);
                 println!("Append ip is {}", String::from_utf8(cc.get_context().to_vec()).unwrap());
-                match cc.get_change_type() {
-                    ConfChangeType::RemoveNode => {
-                        peer_clients.remove(&cc.get_node_id());
-                    },
-                    _ => {
-                        if cc.get_node_id() != r.raft.id {
-                            // let ch = ChannelBuilder::new(env.clone()).connect(
-                            //         &String::from_utf8(cc.get_context().to_vec()).unwrap());
-                            // let client = rafter::RafterClient::new(ch);
-                            // peer_clients.insert(cc.get_node_id(), Box::new(client));
-                        }
-                    }
-                }
-                // r.apply_conf_change(&cc);
+                // match cc.get_change_type() {
+                //     ConfChangeType::RemoveNode => {
+                //         peer_clients.remove(&cc.get_node_id());
+                //     },
+                //     _ => {
+                //         if cc.get_node_id() != r.raft.id {
+                //             // let ch = ChannelBuilder::new(env.clone()).connect(
+                //             //         &String::from_utf8(cc.get_context().to_vec()).unwrap());
+                //             // let client = rafter::RafterClient::new(ch);
+                //             // peer_clients.insert(cc.get_node_id(), Box::new(client));
+                //         }
+                //     }
+                // }
+                r.apply_conf_change(&cc);
             }
 
             // TODO: handle EntryConfChange
@@ -417,15 +393,15 @@ fn on_ready(r: &mut RawNode<MemStorage>,
 }
 
 fn msg_send_thread(receiver: mpsc::Receiver<Message>, env: Arc<Environment>, myid: u64) {
-    // let mut peer_clients = HashMap::new();
+    let mut peer_clients = HashMap::new();
     for i in 1..6 {
         if i == myid {
             continue;
         }
-        // let ch = ChannelBuilder::new(env.clone())
-        //             .connect(&format!("127.0.0.1:{}", 48080 + i * 2 + 1));
-        // let client = rafter::RafterClient::new(ch);
-        // peer_clients.insert(i as u64, Box::new(client));
+        let ch = ChannelBuilder::new(env.clone())
+                    .connect(&format!("127.0.0.1:{}", 48080 + i * 2 + 1));
+        let client = rafter::RafterClient::new(ch);
+        peer_clients.insert(i as u64, Box::new(client));
     }
 
     thread::spawn(move || {loop {
@@ -433,19 +409,16 @@ fn msg_send_thread(receiver: mpsc::Receiver<Message>, env: Arc<Environment>, myi
         //println!("[Debug]({}, {}), recived {:?}", file!(), line!(), msg);
         let to = msg.get_to();
         if to != myid {
-            let env = env.clone();
-            thread::spawn(move || {
-            let ch = ChannelBuilder::new(env)
-                    .connect(&format!("127.0.0.1:{}", 48080 + to * 2 + 1));
-            let client = rafter::RafterClient::new(ch);
-            match client.send_msg(&msg) {
-                Ok(resp) => {
+            let client = peer_clients.get(&to).unwrap();
+            let f = client.send_msg_async(&msg).unwrap()
+                .and_then(move |resp|{
                     println!("[Debug]({}, {}), Send ok  {:?}", file!(), line!(), resp);
-                },
-                Err(e) =>{
-                    println!("Send error is: {}", e);
-                }
-            }});
+                    Ok(())
+                })
+                .map_err(move |e|{
+                    println!("[Error]({}, {})Send error is: {}", file!(), line!(), e);
+                });
+             client.spawn(f);
         }
     }});
 }
@@ -503,10 +476,10 @@ fn apply_command(sender: mpsc::Sender<Msg>, command: Command)
 
     println!("Propose a command");
     unsafe{
-    seq = seq  % 127 + 1;
+    SEQ = SEQ  % 127 + 1;
     
     sender.send(Msg::Propose {
-        id: seq,
+        id: SEQ,
         command,
         cb: Box::new(move |reply| {
             s1.send(reply).unwrap();
@@ -519,12 +492,10 @@ fn apply_command(sender: mpsc::Sender<Msg>, command: Command)
     reply
 }
 
-fn apply_message(sender: mpsc::Sender<Msg>, message: Message) {
-    // println!("Propose a Message");
-
-    // println!("Message is: {:?}", message);
+fn apply_message(sender: mpsc::Sender<Msg>, message: Message) ->Message{
 
     sender.send(Msg::Raft(message)).unwrap();
-
-    // println!("Receive the commnad reply");
+    let mut msg = Message::new();
+    msg.set_reject(false);
+    msg
 }
