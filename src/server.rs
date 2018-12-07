@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use futures::sync::oneshot;
 use futures::Future;
+use futures::future::ok;
 use grpcio::{Environment, RpcContext, ServerBuilder, UnarySink};
 
 use protos::raftpb::HelloRequest;
@@ -25,11 +26,19 @@ impl Greeter for GreeterService {
  
         println!("Recive a req: {:?}", req);
         let msg = format!("Hello {}", req.get_name());
-        thread::sleep(Duration::from_secs(1));
-        let mut resp = HelloReply::new();
-        resp.set_message(msg);
-        let f = sink.success(resp)
-                .map_err(move |e| eprintln!("Fail to reply {:?}: {:?}", req, e));
+        let f = ok::<u32, u32>(1);
+        let f = f.then(move |_| {
+            println!("Req is: {:?}", req);
+            let msg = format!("Hello {}", req.get_name());
+            thread::sleep(Duration::from_secs(1));
+            let mut resp = HelloReply::new();
+            resp.set_message(msg);
+            Ok(resp)
+        })
+        .and_then(|res| sink.success(res)
+                .map_err(move |e| eprintln!("Fail to reply: {:?}", e)))
+        .map(|_| ())
+        .map_err(|_| ());
         ctx.spawn(f);
     }
 }
@@ -37,7 +46,7 @@ impl Greeter for GreeterService {
 
 
 fn main() {
-    let env = Arc::new(Environment::new(1));
+    let env = Arc::new(Environment::new(20));
     let service = raftpb_grpc::create_greeter(GreeterService);
     let mut server = ServerBuilder::new(env)
         .register_service(service)

@@ -26,6 +26,10 @@ git = "https://github.com/pingcap/rust-rocksdb.git"
 git = "https://github.com/mtp401/protoc-grpcio"
 
 [[bin]]
+name = "test"
+path = "src/client.rs"
+
+[[bin]]
 name = "client"
 path = "src/kvclient.rs"
 

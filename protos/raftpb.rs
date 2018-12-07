@@ -905,8 +905,10 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x12\x0e\n\nCommandPut\x10\0\x12\x11\n\rCommandDelete\x10\x01\x12\x0e\n\
     \nCommandGet\x10\x02*1\n\tEntryType\x12\x0f\n\x0bEntryNormal\x10\0\x12\
     \x13\n\x0fEntryConfChange\x10\x012A\n\x07Greeter\x126\n\x08SayHello\x12\
-    \x14.raftpb.HelloRequest\x1a\x12.raftpb.HelloReply\"\0B6\n\x1bio.grpc.ex\
-    amples.helloworldB\x0fHelloWorldProtoP\x01\xa2\x02\x03HLWb\x06proto3\
+    \x14.raftpb.HelloRequest\x1a\x12.raftpb.HelloReply\"\02C\n\tCommander\
+    \x126\n\x0bSendCommand\x12\x0f.raftpb.Command\x1a\x14.raftpb.CommandRepl\
+    y\"\0B6\n\x1bio.grpc.examples.helloworldB\x0fHelloWorldProtoP\x01\xa2\
+    \x02\x03HLWb\x06proto3\
 ";
 
 static mut file_descriptor_proto_lazy: ::protobuf::lazy::Lazy<::protobuf::descriptor::FileDescriptorProto> = ::protobuf::lazy::Lazy {
