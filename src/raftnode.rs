@@ -203,7 +203,7 @@ fn main() {
                     println!("is not leader");
                     let mut reply = CommandReply::new();
                     reply.set_ok(false);
-                    //reply.set_value();
+                    reply.set_value(b"this is foller".to_vec());
                     cb(reply);
                 }
             },
@@ -252,7 +252,6 @@ fn on_ready(r: &mut RawNode<MemStorage>,
         // If the peer is leader, the leader can send messages to other followers ASAP.
         let msgs = ready.messages.drain(..);
         println!("ready messages is {:?}", msgs);
-        // let mut fvec = vec![];
         for msg in msgs {
             sender.send(msg).unwrap();
             // Here we only have one peer, so can ignore this.
