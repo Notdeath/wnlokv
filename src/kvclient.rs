@@ -5,23 +5,22 @@ extern crate tokio;
 //varuse rocksdb::{DB, Writable};
 
 use std::sync::Arc;
-use std::thread;
-use std::time::{Duration, Instant};
-use futures::Future;
-// use tokio_core::reactor::Core;
+//use std::thread;
+//use std::time::{Duration, Instant};
+//use futures::Future;
 
 use grpcio::{ChannelBuilder, EnvBuilder};
-use protos::raftpb::{CommandType, Command};
+use protos::raftpb::{CommandType, Command, CommandReply};
 use protos::commander::CommanderClient;
 
 fn main() {
-    // let mut core = Core::new().unwrap();
     let env = Arc::new(EnvBuilder::new().build());
-    let ch = ChannelBuilder::new(env).connect("localhost:48082");
-    let client = CommanderClient::new(ch);
-    let mut fvec = vec![];
-    let client = client.clone();
-    let startime = Arc::new(Instant::now()); 
+    let mut clients: Vec<CommanderClient> = vec![];
+    let mut reqcount = 1;
+
+    let ch = ChannelBuilder::new(env.clone()).connect(&format!("localhost:{}", 48080 + reqcount * 2));
+    let mut client = CommanderClient::new(ch);
+    
     for i in 0..100 {
         let key = format!("key{}", i);
         let value = format!("value{}", i);
@@ -29,45 +28,74 @@ fn main() {
         req.set_command_type(CommandType::CommandPut);
         req.set_key(key.as_bytes().to_vec());
         req.set_value(value.as_bytes().to_vec());
-        let startime = startime.clone();
-        fvec.push(client.send_command_async(&req).unwrap()
-            .and_then(move |resp| {
-                let time_cost = startime.elapsed();
-                println!("{:?} ({:?})", resp, time_cost);
-                println!("value is {:?}",String::from_utf8(req.value));
-                Ok(())
-        }).map_err(|e| {println!("Grpc [err]({}/{}):{}", file!(), line!(), e)}));
-        thread::sleep(Duration::from_millis(1));
-        //println!("One say hello");
+        let mut resp = CommandReply::new();
+        resp = match client.send_command(&req) {
+            Ok(resp) => {
+                println!("[Put]:{:?} {:?}", resp, String::from_utf8(req.value.clone()));
+                resp
+            },
+            Err(e) => {
+                println!("Error is: {}", e);
+                resp.set_ok(false);
+                resp
+            },
+        };
+        while resp.get_ok() != true {
+            reqcount += 1;
+            let ch = ChannelBuilder::new(env.clone())
+                        .connect(&format!("localhost:{}", 48080 + ((reqcount % 6) + 1)* 2));
+            client = CommanderClient::new(ch);
+            resp = match client.send_command(&req) {
+                Ok(resp) => {
+                    println!("[Put]:{:?} {:?}", resp, String::from_utf8(req.value.clone()));
+                    resp
+                },
+                Err(e) => {
+                    println!("Error is: {}", e);
+                    resp.set_ok(false);
+                    resp
+                },
+            };
+        }
     }
 
-    for f in fvec {
-        tokio::run(f);
-    }
+    reqcount = 1;
     println!("Put data finished");
-    let mut fvec = vec![];
-    let startime = Arc::new(Instant::now()); 
     for i in 0..100 {
         let key = format!("key{}", i);
+        let value = format!("value{}", i);
         let mut req = Command::new();
         req.set_command_type(CommandType::CommandGet);
         req.set_key(key.as_bytes().to_vec());
-        let startime = startime.clone();
-        fvec.push(client.send_command_async(&req).unwrap()
-            .and_then(move |resp| {
-                let time_cost = startime.elapsed();
-                println!("{:?} ({:?})", resp, time_cost);
-                println!("value is {:?}", String::from_utf8(resp.value));
-                Ok(())
-        }).map_err(|e| {println!("Grpc [err]({}/{}):{}", file!(), line!(), e)}));
-        thread::sleep(Duration::from_millis(1));
-        //println!("One say hello");
+        req.set_value(value.as_bytes().to_vec());
+        let mut resp = CommandReply::new();
+        resp = match client.send_command(&req) {
+            Ok(resp) => {
+                println!("[Get]:{:?}", resp);
+                resp
+            },
+            Err(e) => {
+                println!("Error is: {}", e);
+                resp.set_ok(false);
+                resp
+            },
+        };
+        while resp.get_ok() != true {
+            reqcount += 1;
+            let ch = ChannelBuilder::new(env.clone())
+                        .connect(&format!("localhost:{}", 48080 + ((reqcount % 6) + 1)* 2));
+            client = CommanderClient::new(ch);
+            resp = match client.send_command(&req) {
+                Ok(resp) => {
+                    println!("[Get]:{:?}", resp);
+                    resp
+                },
+                Err(e) => {
+                    println!("Error is: {}", e);
+                    resp.set_ok(false);
+                    resp
+                },
+            };
+        }
     }
-
-    for f in fvec {
-        tokio::run(f);
-    }
-
-        //tokio::run()
 }
-
