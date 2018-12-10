@@ -144,6 +144,7 @@ fn main() {
     };
     let mut peers = vec![];
     let peer_count = num+1;
+    //two rpc, Even port for client，Odd port for raftnode
     for i in 1..peer_count {
         let peer_ip = format!("127.0.0.1:{}", 48080 + 2 * i + 1) ;
         peers.push(Peer {
@@ -194,17 +195,6 @@ fn main() {
                 let is_leader = r.raft.leader_id == r.raft.id;
                 if is_leader {
                     println!("is leader");
-                    // if command.get_command_type() == CommandType::CommandPut {
-                    //     let mut reply = CommandReply::new();
-                    //     reply.set_ok(true);
-                    //     //reply.set_value();
-                    //     cb(reply);
-                    // } else if command.get_command_type() == CommandType::CommandGet {
-                    //     let reply = use_commnad(&rocks_db, &command);
-                    //     //reply.set_ok(true);
-                    //     //reply.set_value();
-                    //     cb(reply);
-                    // }
                     cbs.insert(id,cb);
                     let data = protobuf::Message::write_to_bytes(&command).unwrap();
                     println!("Call Data is: {:?}", data);
@@ -236,8 +226,6 @@ fn main() {
         if d >= timeout {
             t = Instant::now();
             timeout = Duration::from_millis(100);
-            // We drive Raft every 100ms.
-            // println!("raft tick: State is {:?}", r.raft.state);
             r.tick();
         } else {
             timeout -= d;
@@ -267,21 +255,8 @@ fn on_ready(r: &mut RawNode<MemStorage>,
         // let mut fvec = vec![];
         for msg in msgs {
             sender.send(msg).unwrap();
-            // let to = msg.get_to();
-            // if to != r.raft.id {
-            //     let ch = ChannelBuilder::new(env.clone())
-            //         .connect(&format!("127.0.0.1:{}", 48080 + to * 2 + 1));
-            //     let client = rafter::RafterClient::new(ch);
-            //     fvec.push(client.send_msg_async(&msg).unwrap()
-            //         .and_then(move |resp| {
-            //             Ok(())
-            //         }).map_err(|_| ()));
-            // }
             // Here we only have one peer, so can ignore this.
         }
-        // for f in fvec {
-        //     tokio::run(f);
-        // }
     }
 
     if !raft::is_empty_snap(ready.snapshot()) {
@@ -317,23 +292,8 @@ fn on_ready(r: &mut RawNode<MemStorage>,
                 _=> {},
             }
             sender.send(msg).unwrap();
-            //println!("send msg ok");
-            // let to = msg.get_to();
-            // if to != r.raft.id {
-            //     let ch = ChannelBuilder::new(env.clone())
-            //         .connect(&format!("127.0.0.1:{}", 48080 + to * 2 + 1));
-            //     let client = rafter::RafterClient::new(ch);
-            //     fvec.push(client.send_msg_async(&msg).unwrap()
-            //         .and_then(move |resp| {
-            //             println!("Send ok {:?}", resp);
-            //             Ok(())
-            //         }).map_err(|_| ()));
-            // }
             // Here we only have one peer, so can ignore this.
         }
-        // for f in fvec {
-        //     tokio::run(f);
-        // }
     }
 
     if let Some(committed_entries) = ready.committed_entries.take() {
@@ -368,19 +328,6 @@ fn on_ready(r: &mut RawNode<MemStorage>,
                 cc.merge_from_bytes(&entry.get_data()).unwrap();
                 println!("ConfChange: {:?}", cc);
                 println!("Append ip is {}", String::from_utf8(cc.get_context().to_vec()).unwrap());
-                // match cc.get_change_type() {
-                //     ConfChangeType::RemoveNode => {
-                //         peer_clients.remove(&cc.get_node_id());
-                //     },
-                //     _ => {
-                //         if cc.get_node_id() != r.raft.id {
-                //             // let ch = ChannelBuilder::new(env.clone()).connect(
-                //             //         &String::from_utf8(cc.get_context().to_vec()).unwrap());
-                //             // let client = rafter::RafterClient::new(ch);
-                //             // peer_clients.insert(cc.get_node_id(), Box::new(client));
-                //         }
-                //     }
-                // }
                 r.apply_conf_change(&cc);
             }
 
