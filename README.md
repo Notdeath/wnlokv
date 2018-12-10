@@ -1,4 +1,4 @@
-** README **
+# README 
  This is a littile  distributed KV server for learn.
  The KV server can deploy at a single mathine.
  It has two major part, the server and the client. The server is a KV server based on 
