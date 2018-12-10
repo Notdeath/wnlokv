@@ -11,11 +11,11 @@
 
 ## run
 ###server
-like this
 ```
-  cargo run --bin raft 5 1
+  cargo run --bin raft [nodes] [id]
+  You need two parameters the nodes and the id, the nodes is the number of nodes the server had
+  and the id is this node's id start with 1. eg: cargo run --bin raft 5 1
 ```
-2 
 
 ###client
 ```
