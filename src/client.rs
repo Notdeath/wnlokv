@@ -6,14 +6,12 @@ use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 use futures::Future;
-use tokio_core::reactor::Core;
 
 use grpcio::{ChannelBuilder, EnvBuilder};
 use protos::raftpb::HelloRequest;
 use protos::raftpb_grpc::GreeterClient;
 
 fn main() {
-    let mut core = Core::new().unwrap();
     let env = Arc::new(EnvBuilder::new().build());
     let ch = ChannelBuilder::new(env).connect("localhost:50051");
     let client = GreeterClient::new(ch);
