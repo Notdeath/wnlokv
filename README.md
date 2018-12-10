@@ -10,14 +10,14 @@
 - [grpc-rs](https://github.com/pingcap/grpc-rs): The gRPC library for Rust built on the gRPC C Core library and Rust Futures
 
 ## run
-###server
+### server
 ```
   cargo run --bin raft [nodes] [id]
   You need two parameters the nodes and the id, the [nodes] is the number of nodes the server had
   and the [id] is this node's id start with 1. eg: cargo run --bin raft 5 1
 ```
 
-###client
+### client
 ```
   cargo run --bin client 
 ```
