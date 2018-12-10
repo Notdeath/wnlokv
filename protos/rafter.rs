@@ -1,19 +1,9 @@
 use std::time::Duration;
-
 use raft::prelude::*;
-use super::raftpb::Command;
-use super::raftpb::CommandReply;
 
 const METHOD_RAFTER_SEND_MSG: ::grpcio::Method<Message, Message> = ::grpcio::Method {
     ty: ::grpcio::MethodType::Unary,
     name: "/raftpb.Rafter/SendMsg",
-    req_mar: ::grpcio::Marshaller { ser: ::grpcio::pb_ser, de: ::grpcio::pb_de },
-    resp_mar: ::grpcio::Marshaller { ser: ::grpcio::pb_ser, de: ::grpcio::pb_de },
-};
-
-const METHOD_RAFTER_SEND_COMMAND: ::grpcio::Method<Command, CommandReply> = ::grpcio::Method {
-    ty: ::grpcio::MethodType::Unary,
-    name: "/raftpb.Rafter/SendCommand",
     req_mar: ::grpcio::Marshaller { ser: ::grpcio::pb_ser, de: ::grpcio::pb_de },
     resp_mar: ::grpcio::Marshaller { ser: ::grpcio::pb_ser, de: ::grpcio::pb_de },
 };
@@ -30,10 +20,9 @@ trait MyDefault {
 
 
 impl MyDefault for ::grpcio::CallOption {
-    fn call_option_default() -> ::grpcio::CallOption {
+    fn call_option_default() ->grpcio::CallOption {
         let op = ::grpcio::CallOption::default();
-        let op = op.timeout(Duration::from_millis(100));
-        op
+        op.timeout(Duration::from_millis(100))
     }
 }
 
@@ -49,7 +38,7 @@ impl RafterClient {
     }
 
     pub fn send_msg(&self, req: &Message) -> ::grpcio::Result<Message> {
-        self.send_msg_opt(req, ::grpcio::CallOption::call_option_default())
+        self.send_msg_opt(req, ::grpcio::CallOption::default())
     }
 
     pub fn send_msg_async_opt(&self, req: &Message, opt: ::grpcio::CallOption) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<Message>> {
@@ -60,21 +49,6 @@ impl RafterClient {
         self.send_msg_async_opt(req, ::grpcio::CallOption::call_option_default())
     }
 
-    pub fn send_command_opt(&self, req: &Command, opt: ::grpcio::CallOption) -> ::grpcio::Result<CommandReply> {
-        self.client.unary_call(&METHOD_RAFTER_SEND_COMMAND, req, opt)
-    }
-
-    pub fn send_command(&self, req: &Command) -> ::grpcio::Result<CommandReply> {
-        self.send_command_opt(req, ::grpcio::CallOption::call_option_default())
-    }
-
-    pub fn send_command_async_opt(&self, req: &Command, opt: ::grpcio::CallOption) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<CommandReply>> {
-        self.client.unary_call_async(&METHOD_RAFTER_SEND_COMMAND, req, opt)
-    }
-
-    pub fn send_command_async(&self, req: &Command) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<CommandReply>> {
-        self.send_command_async_opt(req, ::grpcio::CallOption::call_option_default())
-    }
     pub fn spawn<F>(&self, f: F) where F: ::futures::Future<Item = (), Error = ()> + Send + 'static {
         self.client.spawn(f)
     }
@@ -82,7 +56,6 @@ impl RafterClient {
 
 pub trait Rafter {
     fn send_msg(&mut self, ctx: ::grpcio::RpcContext, req: Message, sink: ::grpcio::UnarySink<Message>);
-    fn send_command(&mut self, ctx: ::grpcio::RpcContext, req: Command, sink: ::grpcio::UnarySink<CommandReply>);
 }
 
 pub fn create_rafter<S: Rafter + Send + Clone + 'static>(s: S) -> ::grpcio::Service {
@@ -90,10 +63,6 @@ pub fn create_rafter<S: Rafter + Send + Clone + 'static>(s: S) -> ::grpcio::Serv
     let mut instance = s.clone();
     builder = builder.add_unary_handler(&METHOD_RAFTER_SEND_MSG, move |ctx, req, resp| {
         instance.send_msg(ctx, req, resp)
-    });
-    let mut instance = s.clone();
-    builder = builder.add_unary_handler(&METHOD_RAFTER_SEND_COMMAND, move |ctx, req, resp| {
-        instance.send_command(ctx, req, resp)
     });
     builder.build()
 }
