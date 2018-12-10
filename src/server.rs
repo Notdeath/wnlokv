@@ -43,8 +43,6 @@ impl Greeter for GreeterService {
     }
 }
 
-
-
 fn main() {
     let env = Arc::new(Environment::new(20));
     let service = raftpb_grpc::create_greeter(GreeterService);
